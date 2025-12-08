@@ -1,0 +1,61 @@
+/* assets/style.css */
+
+/* Import Fonts */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
+
+:root {
+    --background-color: #081B16;
+    --card-bg: #0D3128;
+    --text-title: #CC1417;
+    --text-primary: #eff1ed;
+}
+
+/* GLOBAL FONT & RESET */
+body {
+    background-color: #000000;
+    margin: 50px 100px;
+    font-family: 'DM Sans', sans-serif !important;
+}
+
+h1, h2, h3, h4, h5, h6, .card, .toast, .dash-table-container, .ag-theme-alpine-dark {
+    font-family: 'DM Sans', sans-serif !important;
+}
+
+*:focus {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* COMPONENT OVERRIDES */
+.card {
+    background-color: #111 !important;
+    border: none !important;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
+
+.toast {
+    background-color: #222 !important;
+    color: white !important;
+    border: none !important;
+}
+
+#map-graph .main-svg {
+    border-radius: 12px;
+    border: none !important;
+}
+
+/* AG GRID & DROPDOWN FIXES */
+.ag-theme-alpine-dark, .ag-root-wrapper {
+    border: none !important;
+}
+
+.Select-control, .Select-menu-outer, .Select-option {
+    background-color: #1a1a1a !important;
+    border: none !important;
+    color: white !important;
+}
+
+.Select-value-label {
+    color: white !important;
+}

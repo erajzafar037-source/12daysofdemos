@@ -1,0 +1,3785 @@
+{
+  "datasets": [
+    {
+      "name": "elf_teams_list",
+      "displayName": "list_elf_teams",
+      "queryLines": [
+        "SELECT DISTINCT\n",
+        "  elf_team_id\n",
+        "FROM\n",
+        "  main.dbrx_12daysofdemos.workshop_production\n",
+        "WHERE\n",
+        "  elf_team_id IS NOT NULL\n",
+        "ORDER BY\n",
+        "  elf_team_id"
+      ]
+    },
+    {
+      "name": "toy_categories_list",
+      "displayName": "list_toy_categories",
+      "queryLines": [
+        "SELECT DISTINCT\n",
+        "  toy_category\n",
+        "FROM\n",
+        "  main.dbrx_12daysofdemos.workshop_production\n",
+        "WHERE\n",
+        "  toy_category IS NOT NULL\n",
+        "ORDER BY\n",
+        "  toy_category"
+      ]
+    },
+    {
+      "name": "toy_ids_list",
+      "displayName": "list_toy_IDs",
+      "queryLines": [
+        "SELECT DISTINCT\n",
+        "  toy_id,\n",
+        "  toy_name\n",
+        "FROM\n",
+        "  main.dbrx_12daysofdemos.workshop_production\n",
+        "WHERE\n",
+        "  toy_id IS NOT NULL\n",
+        "ORDER BY\n",
+        "  toy_name"
+      ]
+    },
+    {
+      "name": "quality_tiers_list",
+      "displayName": "list_quality_tiers",
+      "queryLines": [
+        "SELECT DISTINCT\n",
+        "  quality_tier\n",
+        "FROM\n",
+        "  main.dbrx_12daysofdemos.workshop_production\n",
+        "WHERE\n",
+        "  quality_tier IS NOT NULL\n",
+        "ORDER BY\n",
+        "  quality_tier"
+      ]
+    },
+    {
+      "name": "material_threshold_options",
+      "displayName": "list_material_thresholds",
+      "queryLines": [
+        "SELECT\n",
+        "  explode(array(0, 10, 20, 30, 40, 50, 60, 70, 80, 90)) as threshold"
+      ]
+    },
+    {
+      "name": "elf_team_performance_summary",
+      "displayName": "report_elf_team_performance_summary",
+      "queryLines": [
+        "WITH pre_filtered_data AS (\n",
+        "  SELECT\n",
+        "    *,\n",
+        "    (\n",
+        "      materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg\n",
+        "    ) as total_materials,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_plastic_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as plastic_percentage,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_wood_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as wood_percentage\n",
+        "  FROM\n",
+        "    main.dbrx_12daysofdemos.workshop_production\n",
+        "  WHERE\n",
+        "    production_date BETWEEN :date_range.min AND :date_range.max\n",
+        "    AND (\n",
+        "      array_contains(:elf_teams, elf_team_id)\n",
+        "      OR array_contains(:elf_teams, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_categories, toy_category)\n",
+        "      OR array_contains(:toy_categories, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_ids, toy_id)\n",
+        "      OR array_contains(:toy_ids, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:quality_tiers, quality_tier)\n",
+        "      OR array_contains(:quality_tiers, 'ALL')\n",
+        "    )\n",
+        "),\n",
+        "filtered_data as (\n",
+        "  select * from pre_filtered_data where\n",
+        "    plastic_percentage >= :min_plastic_percentage\n",
+        "    AND wood_percentage >= :min_wood_percentage\n",
+        ")\n",
+        "SELECT\n",
+        "  elf_team_id,\n",
+        "  COUNT(DISTINCT batch_id) as total_batches,\n",
+        "  COUNT(DISTINCT toy_id) as unique_toys_produced,\n",
+        "  AVG(paint_quality) as avg_paint_quality,\n",
+        "  AVG(assembly_score) as avg_assembly_score,\n",
+        "  AVG(\n",
+        "    CASE\n",
+        "      WHEN safety_check_passed THEN 1\n",
+        "      ELSE 0\n",
+        "    END\n",
+        "  )\n",
+        "  * 100 as safety_pass_rate,\n",
+        "  AVG(defect_count) as avg_defects,\n",
+        "  SUM(production_time_minutes) / 60 as total_production_hours,\n",
+        "  AVG(production_time_minutes) as avg_production_time,\n",
+        "  AVG(predicted_popularity_score) as avg_popularity_score,\n",
+        "  SUM(carbon_footprint_kg) as total_carbon_footprint,\n",
+        "  SUM(materials_plastic_kg) as total_plastic_kg,\n",
+        "  SUM(materials_wood_kg) as total_wood_kg,\n",
+        "  SUM(materials_metal_kg) as total_metal_kg,\n",
+        "  SUM(materials_fabric_kg) as total_fabric_kg\n",
+        "FROM\n",
+        "  filtered_data\n",
+        "GROUP BY\n",
+        "  elf_team_id\n",
+        "ORDER BY\n",
+        "  avg_assembly_score DESC"
+      ],
+      "parameters": [
+        {
+          "displayName": "Date Range",
+          "keyword": "date_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "now-30d/d"
+              },
+              "max": {
+                "value": "now/d"
+              }
+            }
+          }
+        },
+        {
+          "displayName": "Elf Teams",
+          "keyword": "elf_teams",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy Categories",
+          "keyword": "toy_categories",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy IDs",
+          "keyword": "toy_ids",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Quality Tiers",
+          "keyword": "quality_tiers",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Plastic %",
+          "keyword": "min_plastic_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Wood %",
+          "keyword": "min_wood_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "daily_production_trend",
+      "displayName": "report_daily_production_trend",
+      "queryLines": [
+        "WITH pre_filtered_data AS (\n",
+        "  SELECT\n",
+        "    *,\n",
+        "    (\n",
+        "      materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg\n",
+        "    ) as total_materials,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_plastic_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as plastic_percentage,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_wood_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as wood_percentage\n",
+        "  FROM\n",
+        "    main.dbrx_12daysofdemos.workshop_production\n",
+        "  WHERE\n",
+        "    production_date BETWEEN :date_range.min AND :date_range.max\n",
+        "    AND (\n",
+        "      array_contains(:elf_teams, elf_team_id)\n",
+        "      OR array_contains(:elf_teams, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_categories, toy_category)\n",
+        "      OR array_contains(:toy_categories, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_ids, toy_id)\n",
+        "      OR array_contains(:toy_ids, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:quality_tiers, quality_tier)\n",
+        "      OR array_contains(:quality_tiers, 'ALL')\n",
+        "    )\n",
+        "),\n",
+        "filtered_data as (\n",
+        "  select * from pre_filtered_data where\n",
+        "    plastic_percentage >= :min_plastic_percentage\n",
+        "    AND wood_percentage >= :min_wood_percentage\n",
+        ")\n",
+        "SELECT\n",
+        "  production_date,\n",
+        "  elf_team_id,\n",
+        "  COUNT(*) as daily_production,\n",
+        "  AVG(assembly_score) as avg_quality_score,\n",
+        "  SUM(\n",
+        "    CASE\n",
+        "      WHEN safety_check_passed THEN 1\n",
+        "      ELSE 0\n",
+        "    END\n",
+        "  ) as safety_passed,\n",
+        "  SUM(\n",
+        "    CASE\n",
+        "      WHEN NOT safety_check_passed THEN 1\n",
+        "      ELSE 0\n",
+        "    END\n",
+        "  ) as safety_failed\n",
+        "FROM\n",
+        "  filtered_data\n",
+        "GROUP BY\n",
+        "  production_date,\n",
+        "  elf_team_id\n",
+        "ORDER BY\n",
+        "  production_date,\n",
+        "  elf_team_id"
+      ],
+      "parameters": [
+        {
+          "displayName": "Date Range",
+          "keyword": "date_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "now-30d/d"
+              },
+              "max": {
+                "value": "now/d"
+              }
+            }
+          }
+        },
+        {
+          "displayName": "Elf Teams",
+          "keyword": "elf_teams",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy Categories",
+          "keyword": "toy_categories",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy IDs",
+          "keyword": "toy_ids",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Quality Tiers",
+          "keyword": "quality_tiers",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Plastic %",
+          "keyword": "min_plastic_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Wood %",
+          "keyword": "min_wood_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "quality_distribution",
+      "displayName": "report_quality_distribution",
+      "queryLines": [
+        "WITH pre_filtered_data AS (\n",
+        "  SELECT\n",
+        "    *,\n",
+        "    (\n",
+        "      materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg\n",
+        "    ) as total_materials,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_plastic_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as plastic_percentage,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_wood_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as wood_percentage\n",
+        "  FROM\n",
+        "    main.dbrx_12daysofdemos.workshop_production\n",
+        "  WHERE\n",
+        "    production_date BETWEEN :date_range.min AND :date_range.max\n",
+        "    AND (\n",
+        "      array_contains(:elf_teams, elf_team_id)\n",
+        "      OR array_contains(:elf_teams, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_categories, toy_category)\n",
+        "      OR array_contains(:toy_categories, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_ids, toy_id)\n",
+        "      OR array_contains(:toy_ids, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:quality_tiers, quality_tier)\n",
+        "      OR array_contains(:quality_tiers, 'ALL')\n",
+        "    )\n",
+        "),\n",
+        "filtered_data as (\n",
+        "  select * from pre_filtered_data where\n",
+        "    plastic_percentage >= :min_plastic_percentage\n",
+        "    AND wood_percentage >= :min_wood_percentage\n",
+        ")\n",
+        "SELECT\n",
+        "  elf_team_id,\n",
+        "  quality_tier,\n",
+        "  COUNT(*) as count,\n",
+        "  AVG(assembly_score) as avg_score\n",
+        "FROM\n",
+        "  filtered_data\n",
+        "GROUP BY\n",
+        "  elf_team_id,\n",
+        "  quality_tier"
+      ],
+      "parameters": [
+        {
+          "displayName": "Date Range",
+          "keyword": "date_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "now-30d/d"
+              },
+              "max": {
+                "value": "now/d"
+              }
+            }
+          }
+        },
+        {
+          "displayName": "Elf Teams",
+          "keyword": "elf_teams",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy Categories",
+          "keyword": "toy_categories",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy IDs",
+          "keyword": "toy_ids",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Quality Tiers",
+          "keyword": "quality_tiers",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Plastic %",
+          "keyword": "min_plastic_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Wood %",
+          "keyword": "min_wood_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "material_usage_by_team",
+      "displayName": "report_material_usage",
+      "queryLines": [
+        "WITH pre_filtered_data AS (\n",
+        "  SELECT\n",
+        "    *,\n",
+        "    (\n",
+        "      materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg\n",
+        "    ) as total_materials,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_plastic_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as plastic_percentage,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_wood_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as wood_percentage\n",
+        "  FROM\n",
+        "    main.dbrx_12daysofdemos.workshop_production\n",
+        "  WHERE\n",
+        "    production_date BETWEEN :date_range.min AND :date_range.max\n",
+        "    AND (\n",
+        "      array_contains(:elf_teams, elf_team_id)\n",
+        "      OR array_contains(:elf_teams, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_categories, toy_category)\n",
+        "      OR array_contains(:toy_categories, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_ids, toy_id)\n",
+        "      OR array_contains(:toy_ids, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:quality_tiers, quality_tier)\n",
+        "      OR array_contains(:quality_tiers, 'ALL')\n",
+        "    )\n",
+        "),\n",
+        "filtered_data as (\n",
+        "  select * from pre_filtered_data where\n",
+        "    plastic_percentage >= :min_plastic_percentage\n",
+        "    AND wood_percentage >= :min_wood_percentage\n",
+        ")\n",
+        "SELECT\n",
+        "  elf_team_id,\n",
+        "  'Plastic' as material_type,\n",
+        "  SUM(materials_plastic_kg) as amount\n",
+        "FROM\n",
+        "  filtered_data\n",
+        "GROUP BY\n",
+        "  elf_team_id\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  elf_team_id,\n",
+        "  'Wood' as material_type,\n",
+        "  SUM(materials_wood_kg) as amount\n",
+        "FROM\n",
+        "  filtered_data\n",
+        "GROUP BY\n",
+        "  elf_team_id\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  elf_team_id,\n",
+        "  'Metal' as material_type,\n",
+        "  SUM(materials_metal_kg) as amount\n",
+        "FROM\n",
+        "  filtered_data\n",
+        "GROUP BY\n",
+        "  elf_team_id\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  elf_team_id,\n",
+        "  'Fabric' as material_type,\n",
+        "  SUM(materials_fabric_kg) as amount\n",
+        "FROM\n",
+        "  filtered_data\n",
+        "GROUP BY\n",
+        "  elf_team_id"
+      ],
+      "parameters": [
+        {
+          "displayName": "Date Range",
+          "keyword": "date_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "now-30d/d"
+              },
+              "max": {
+                "value": "now/d"
+              }
+            }
+          }
+        },
+        {
+          "displayName": "Elf Teams",
+          "keyword": "elf_teams",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy Categories",
+          "keyword": "toy_categories",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy IDs",
+          "keyword": "toy_ids",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Quality Tiers",
+          "keyword": "quality_tiers",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Plastic %",
+          "keyword": "min_plastic_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Wood %",
+          "keyword": "min_wood_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "efficiency_metrics",
+      "displayName": "report_efficiency_metrics",
+      "queryLines": [
+        "WITH pre_filtered_data AS (\n",
+        "  SELECT\n",
+        "    *,\n",
+        "    (\n",
+        "      materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg\n",
+        "    ) as total_materials,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_plastic_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as plastic_percentage,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_wood_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as wood_percentage\n",
+        "  FROM\n",
+        "    main.dbrx_12daysofdemos.workshop_production\n",
+        "  WHERE\n",
+        "    production_date BETWEEN :date_range.min AND :date_range.max\n",
+        "    AND (\n",
+        "      array_contains(:elf_teams, elf_team_id)\n",
+        "      OR array_contains(:elf_teams, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_categories, toy_category)\n",
+        "      OR array_contains(:toy_categories, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_ids, toy_id)\n",
+        "      OR array_contains(:toy_ids, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:quality_tiers, quality_tier)\n",
+        "      OR array_contains(:quality_tiers, 'ALL')\n",
+        "    )\n",
+        "),\n",
+        "filtered_data as (\n",
+        "  select * from pre_filtered_data where\n",
+        "    plastic_percentage >= :min_plastic_percentage\n",
+        "    AND wood_percentage >= :min_wood_percentage\n",
+        ")\n",
+        "SELECT\n",
+        "  elf_team_id,\n",
+        "  toy_category,\n",
+        "  AVG(production_time_minutes) as avg_production_time,\n",
+        "  AVG(defect_count) as avg_defects,\n",
+        "  AVG(carbon_footprint_kg) as avg_carbon_footprint,\n",
+        "  COUNT(*) / COUNT(DISTINCT production_date) as daily_throughput\n",
+        "FROM\n",
+        "  filtered_data\n",
+        "GROUP BY\n",
+        "  elf_team_id,\n",
+        "  toy_category"
+      ],
+      "parameters": [
+        {
+          "displayName": "Date Range",
+          "keyword": "date_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "now-30d/d"
+              },
+              "max": {
+                "value": "now/d"
+              }
+            }
+          }
+        },
+        {
+          "displayName": "Elf Teams",
+          "keyword": "elf_teams",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy Categories",
+          "keyword": "toy_categories",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy IDs",
+          "keyword": "toy_ids",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Quality Tiers",
+          "keyword": "quality_tiers",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Plastic %",
+          "keyword": "min_plastic_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Wood %",
+          "keyword": "min_wood_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "top_toys_by_team",
+      "displayName": "report_top_toys",
+      "queryLines": [
+        "WITH pre_filtered_data AS (\n",
+        "  SELECT\n",
+        "    *,\n",
+        "    (\n",
+        "      materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg\n",
+        "    ) as total_materials,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_plastic_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as plastic_percentage,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_wood_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as wood_percentage\n",
+        "  FROM\n",
+        "    main.dbrx_12daysofdemos.workshop_production\n",
+        "  WHERE\n",
+        "    production_date BETWEEN :date_range.min AND :date_range.max\n",
+        "    AND (\n",
+        "      array_contains(:elf_teams, elf_team_id)\n",
+        "      OR array_contains(:elf_teams, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_categories, toy_category)\n",
+        "      OR array_contains(:toy_categories, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_ids, toy_id)\n",
+        "      OR array_contains(:toy_ids, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:quality_tiers, quality_tier)\n",
+        "      OR array_contains(:quality_tiers, 'ALL')\n",
+        "    )\n",
+        "),\n",
+        "filtered_data as (\n",
+        "  select * from pre_filtered_data where\n",
+        "    plastic_percentage >= :min_plastic_percentage\n",
+        "    AND wood_percentage >= :min_wood_percentage\n",
+        "),\n",
+        "ranked_toys AS (\n",
+        "  SELECT\n",
+        "    elf_team_id,\n",
+        "    toy_name,\n",
+        "    COUNT(*) as production_count,\n",
+        "    AVG(predicted_popularity_score) as avg_popularity,\n",
+        "    ROW_NUMBER() OVER (PARTITION BY elf_team_id ORDER BY COUNT(*) DESC) as rank\n",
+        "  FROM\n",
+        "    filtered_data\n",
+        "  GROUP BY\n",
+        "    elf_team_id,\n",
+        "    toy_name\n",
+        ")\n",
+        "SELECT\n",
+        "  *\n",
+        "FROM\n",
+        "  ranked_toys\n",
+        "WHERE\n",
+        "  rank <= 5"
+      ],
+      "parameters": [
+        {
+          "displayName": "Date Range",
+          "keyword": "date_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "now-30d/d"
+              },
+              "max": {
+                "value": "now/d"
+              }
+            }
+          }
+        },
+        {
+          "displayName": "Elf Teams",
+          "keyword": "elf_teams",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy Categories",
+          "keyword": "toy_categories",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy IDs",
+          "keyword": "toy_ids",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Quality Tiers",
+          "keyword": "quality_tiers",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Plastic %",
+          "keyword": "min_plastic_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Wood %",
+          "keyword": "min_wood_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "hourly_production_heatmap",
+      "displayName": "report_hourly_production",
+      "queryLines": [
+        "WITH pre_filtered_data AS (\n",
+        "  SELECT\n",
+        "    *,\n",
+        "    HOUR(production_timestamp) as hour_of_day,\n",
+        "    DAYOFWEEK(production_date) as day_of_week,\n",
+        "    (\n",
+        "      materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg\n",
+        "    ) as total_materials,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_plastic_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as plastic_percentage,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_wood_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as wood_percentage\n",
+        "  FROM\n",
+        "    main.dbrx_12daysofdemos.workshop_production\n",
+        "  WHERE\n",
+        "    production_date BETWEEN :date_range.min AND :date_range.max\n",
+        "    AND (\n",
+        "      array_contains(:elf_teams, elf_team_id)\n",
+        "      OR array_contains(:elf_teams, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_categories, toy_category)\n",
+        "      OR array_contains(:toy_categories, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_ids, toy_id)\n",
+        "      OR array_contains(:toy_ids, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:quality_tiers, quality_tier)\n",
+        "      OR array_contains(:quality_tiers, 'ALL')\n",
+        "    )\n",
+        "),\n",
+        "filtered_data as (\n",
+        "  select * from pre_filtered_data where\n",
+        "    plastic_percentage >= :min_plastic_percentage\n",
+        "    AND wood_percentage >= :min_wood_percentage\n",
+        ")\n",
+        "SELECT\n",
+        "  elf_team_id,\n",
+        "  hour_of_day,\n",
+        "  day_of_week,\n",
+        "  COUNT(*) as production_count,\n",
+        "  AVG(assembly_score) as avg_quality\n",
+        "FROM\n",
+        "  filtered_data\n",
+        "GROUP BY\n",
+        "  elf_team_id,\n",
+        "  hour_of_day,\n",
+        "  day_of_week"
+      ],
+      "parameters": [
+        {
+          "displayName": "Date Range",
+          "keyword": "date_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "now-30d/d"
+              },
+              "max": {
+                "value": "now/d"
+              }
+            }
+          }
+        },
+        {
+          "displayName": "Elf Teams",
+          "keyword": "elf_teams",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy Categories",
+          "keyword": "toy_categories",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy IDs",
+          "keyword": "toy_ids",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Quality Tiers",
+          "keyword": "quality_tiers",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Plastic %",
+          "keyword": "min_plastic_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Wood %",
+          "keyword": "min_wood_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "defect_analysis",
+      "displayName": "report_defect_analysis",
+      "queryLines": [
+        "WITH pre_filtered_data AS (\n",
+        "  SELECT\n",
+        "    *,\n",
+        "    (\n",
+        "      materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg\n",
+        "    ) as total_materials,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_plastic_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as plastic_percentage,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_wood_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as wood_percentage\n",
+        "  FROM\n",
+        "    main.dbrx_12daysofdemos.workshop_production\n",
+        "  WHERE\n",
+        "    production_date BETWEEN :date_range.min AND :date_range.max\n",
+        "    AND (\n",
+        "      array_contains(:elf_teams, elf_team_id)\n",
+        "      OR array_contains(:elf_teams, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_categories, toy_category)\n",
+        "      OR array_contains(:toy_categories, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_ids, toy_id)\n",
+        "      OR array_contains(:toy_ids, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:quality_tiers, quality_tier)\n",
+        "      OR array_contains(:quality_tiers, 'ALL')\n",
+        "    )\n",
+        "),\n",
+        "filtered_data as (\n",
+        "  select * from pre_filtered_data where\n",
+        "    plastic_percentage >= :min_plastic_percentage\n",
+        "    AND wood_percentage >= :min_wood_percentage\n",
+        ")\n",
+        "SELECT\n",
+        "  elf_team_id,\n",
+        "  CASE\n",
+        "    WHEN defect_count = 0 THEN '0 Defects'\n",
+        "    WHEN defect_count BETWEEN 1 AND 2 THEN '1-2 Defects'\n",
+        "    WHEN defect_count BETWEEN 3 AND 5 THEN '3-5 Defects'\n",
+        "    ELSE '6+ Defects'\n",
+        "  END as defect_range,\n",
+        "  COUNT(*) as count,\n",
+        "  AVG(assembly_score) as avg_assembly_score,\n",
+        "  AVG(paint_quality) as avg_paint_quality\n",
+        "FROM\n",
+        "  filtered_data\n",
+        "GROUP BY\n",
+        "  elf_team_id,\n",
+        "  defect_range\n",
+        "ORDER BY\n",
+        "  elf_team_id,\n",
+        "  defect_range"
+      ],
+      "parameters": [
+        {
+          "displayName": "Date Range",
+          "keyword": "date_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "now-30d/d"
+              },
+              "max": {
+                "value": "now/d"
+              }
+            }
+          }
+        },
+        {
+          "displayName": "Elf Teams",
+          "keyword": "elf_teams",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy Categories",
+          "keyword": "toy_categories",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy IDs",
+          "keyword": "toy_ids",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Quality Tiers",
+          "keyword": "quality_tiers",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Plastic %",
+          "keyword": "min_plastic_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Wood %",
+          "keyword": "min_wood_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "workshop_location_performance",
+      "displayName": "report_location_preferences",
+      "queryLines": [
+        "WITH pre_filtered_data AS (\n",
+        "  SELECT\n",
+        "    *,\n",
+        "    (\n",
+        "      materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg\n",
+        "    ) as total_materials,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_plastic_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as plastic_percentage,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_wood_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as wood_percentage\n",
+        "  FROM\n",
+        "    main.dbrx_12daysofdemos.workshop_production\n",
+        "  WHERE\n",
+        "    production_date BETWEEN :date_range.min AND :date_range.max\n",
+        "    AND (\n",
+        "      array_contains(:elf_teams, elf_team_id)\n",
+        "      OR array_contains(:elf_teams, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_categories, toy_category)\n",
+        "      OR array_contains(:toy_categories, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_ids, toy_id)\n",
+        "      OR array_contains(:toy_ids, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:quality_tiers, quality_tier)\n",
+        "      OR array_contains(:quality_tiers, 'ALL')\n",
+        "    )\n",
+        "),\n",
+        "filtered_data as (\n",
+        "  select * from pre_filtered_data where\n",
+        "    plastic_percentage >= :min_plastic_percentage\n",
+        "    AND wood_percentage >= :min_wood_percentage\n",
+        ")\n",
+        "SELECT\n",
+        "  workshop_location,\n",
+        "  elf_team_id,\n",
+        "  COUNT(*) as production_count,\n",
+        "  AVG(assembly_score) as avg_quality,\n",
+        "  SUM(carbon_footprint_kg) as total_carbon\n",
+        "FROM\n",
+        "  filtered_data\n",
+        "GROUP BY\n",
+        "  workshop_location,\n",
+        "  elf_team_id"
+      ],
+      "parameters": [
+        {
+          "displayName": "Date Range",
+          "keyword": "date_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "now-30d/d"
+              },
+              "max": {
+                "value": "now/d"
+              }
+            }
+          }
+        },
+        {
+          "displayName": "Elf Teams",
+          "keyword": "elf_teams",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy Categories",
+          "keyword": "toy_categories",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy IDs",
+          "keyword": "toy_ids",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Quality Tiers",
+          "keyword": "quality_tiers",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Plastic %",
+          "keyword": "min_plastic_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Wood %",
+          "keyword": "min_wood_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10919f22",
+      "displayName": "report_daily_production_trend (Forecasted)",
+      "queryLines": [
+        "WITH original_table AS (\n",
+        "    SELECT \n",
+        "  DATE_TRUNC(\"DAY\", `production_date`) AS production_date,\n",
+        "  SUM(`daily_production`) AS daily_production\n",
+        "FROM (\n",
+        "    WITH pre_filtered_data AS (\n",
+        "  SELECT\n",
+        "    *,\n",
+        "    (\n",
+        "      materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg\n",
+        "    ) as total_materials,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_plastic_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as plastic_percentage,\n",
+        "    CASE\n",
+        "      WHEN\n",
+        "        (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg) > 0\n",
+        "      THEN\n",
+        "        (\n",
+        "          materials_wood_kg\n",
+        "          / (materials_plastic_kg + materials_wood_kg + materials_metal_kg + materials_fabric_kg)\n",
+        "        )\n",
+        "        * 100\n",
+        "      ELSE 0\n",
+        "    END as wood_percentage\n",
+        "  FROM\n",
+        "    main.dbrx_12daysofdemos.workshop_production\n",
+        "  WHERE\n",
+        "    production_date BETWEEN :date_range.min AND :date_range.max\n",
+        "    AND (\n",
+        "      array_contains(:elf_teams, elf_team_id)\n",
+        "      OR array_contains(:elf_teams, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_categories, toy_category)\n",
+        "      OR array_contains(:toy_categories, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:toy_ids, toy_id)\n",
+        "      OR array_contains(:toy_ids, 'ALL')\n",
+        "    )\n",
+        "    AND (\n",
+        "      array_contains(:quality_tiers, quality_tier)\n",
+        "      OR array_contains(:quality_tiers, 'ALL')\n",
+        "    )\n",
+        "),\n",
+        "filtered_data as (\n",
+        "  select * from pre_filtered_data where\n",
+        "    plastic_percentage >= :min_plastic_percentage\n",
+        "    AND wood_percentage >= :min_wood_percentage\n",
+        ")\n",
+        "SELECT\n",
+        "  production_date,\n",
+        "  elf_team_id,\n",
+        "  COUNT(*) as daily_production,\n",
+        "  AVG(assembly_score) as avg_quality_score,\n",
+        "  SUM(\n",
+        "    CASE\n",
+        "      WHEN safety_check_passed THEN 1\n",
+        "      ELSE 0\n",
+        "    END\n",
+        "  ) as safety_passed,\n",
+        "  SUM(\n",
+        "    CASE\n",
+        "      WHEN NOT safety_check_passed THEN 1\n",
+        "      ELSE 0\n",
+        "    END\n",
+        "  ) as safety_failed\n",
+        "FROM\n",
+        "  filtered_data\n",
+        "GROUP BY\n",
+        "  production_date,\n",
+        "  elf_team_id\n",
+        "ORDER BY\n",
+        "  production_date,\n",
+        "  elf_team_id\n",
+        ") GROUP BY 1\n",
+        "  ),\n",
+        "  dates AS (\n",
+        "    SELECT \n",
+        "      MAX(production_date) AS max_date_column,\n",
+        "      MIN(production_date) AS min_date_column,\n",
+        "      MAX_BY(daily_production, production_date) AS daily_production\n",
+        "    FROM original_table\n",
+        "  ),\n",
+        "  forecast_table AS (\n",
+        "    SELECT \n",
+        "      production_date,\n",
+        "      daily_production_forecast,\n",
+        "      daily_production_upper,\n",
+        "      daily_production_lower,\n",
+        "      NULL AS daily_production\n",
+        "    FROM AI_FORECAST(\n",
+        "      TABLE(original_table),\n",
+        "      horizon => (\n",
+        "        SELECT\n",
+        "          max_date_column + MAKE_DT_INTERVAL(CAST(FLOOR(DATEDIFF(max_date_column, min_date_column) * 0.5) AS INT), 0, 0, 0)\n",
+        "        FROM dates\n",
+        "      ),\n",
+        "      time_col => 'production_date',\n",
+        "      value_col => 'daily_production'\n",
+        "    )\n",
+        "  )\n",
+        "\n",
+        "  SELECT * FROM forecast_table\n",
+        "  UNION ALL\n",
+        "  SELECT\n",
+        "    production_date,\n",
+        "    NULL AS daily_production_forecast,\n",
+        "    NULL AS daily_production_upper,\n",
+        "    NULL AS daily_production_lower,\n",
+        "    daily_production\n",
+        "  FROM original_table\n",
+        "    WHERE production_date < (SELECT max_date_column FROM dates)\n",
+        "  UNION ALL\n",
+        "  SELECT\n",
+        "    max_date_column AS production_date,\n",
+        "    daily_production AS daily_production_forecast,\n",
+        "    daily_production AS daily_production_upper,\n",
+        "    daily_production AS daily_production_lower,\n",
+        "    daily_production\n",
+        "  FROM\n",
+        "    dates"
+      ],
+      "parameters": [
+        {
+          "displayName": "Date Range",
+          "keyword": "date_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "now-30d/d"
+              },
+              "max": {
+                "value": "now/d"
+              }
+            }
+          }
+        },
+        {
+          "displayName": "Elf Teams",
+          "keyword": "elf_teams",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy Categories",
+          "keyword": "toy_categories",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Toy IDs",
+          "keyword": "toy_ids",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Quality Tiers",
+          "keyword": "quality_tiers",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "ALL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Plastic %",
+          "keyword": "min_plastic_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Min Wood %",
+          "keyword": "min_wood_percentage",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "main_dashboard",
+      "displayName": "Elf Team Performance Dashboard",
+      "layout": [
+        {
+          "widget": {
+            "name": "d1270e7e",
+            "multilineTextboxSpec": {
+              "lines": [
+                "**12 Days of Demos**\n",
+                "\n",
+                "# 🎅 Elf Team Performance Summary Dashboard 🎄\n",
+                "\n",
+                "This dashboard provides a comprehensive performance overview of elf teams across workshop production metrics."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "elf-teams",
+            "queries": [
+              {
+                "name": "dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f62170e9abe31c00fdb9baa_elf_team_id",
+                "query": {
+                  "datasetName": "elf_teams_list",
+                  "fields": [
+                    {
+                      "name": "elf_team_id",
+                      "expression": "`elf_team_id`"
+                    },
+                    {
+                      "name": "elf_team_id_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "elf_team_id",
+                    "queryName": "dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f62170e9abe31c00fdb9baa_elf_team_id"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Elf Teams"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 3,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "toy-categories",
+            "queries": [
+              {
+                "name": "dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f62174fa8b1c9aedddda97a_toy_category",
+                "query": {
+                  "datasetName": "toy_categories_list",
+                  "fields": [
+                    {
+                      "name": "toy_category",
+                      "expression": "`toy_category`"
+                    },
+                    {
+                      "name": "toy_category_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "toy_category",
+                    "queryName": "dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f62174fa8b1c9aedddda97a_toy_category"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "showDescription": false,
+                "title": "Toy Categories"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 3,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "toy-ids",
+            "queries": [
+              {
+                "name": "dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f62175c8779ee298b4ca838_toy_id",
+                "query": {
+                  "datasetName": "toy_ids_list",
+                  "fields": [
+                    {
+                      "name": "toy_id",
+                      "expression": "`toy_id`"
+                    },
+                    {
+                      "name": "toy_id_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "toy_id",
+                    "queryName": "dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f62175c8779ee298b4ca838_toy_id"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Toy IDs"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 4,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "quality-tiers",
+            "queries": [
+              {
+                "name": "dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217649bf222cb2982bc03_quality_tier",
+                "query": {
+                  "datasetName": "quality_tiers_list",
+                  "fields": [
+                    {
+                      "name": "quality_tier",
+                      "expression": "`quality_tier`"
+                    },
+                    {
+                      "name": "quality_tier_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "quality_tier",
+                    "queryName": "dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217649bf222cb2982bc03_quality_tier"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Quality Tiers"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 4,
+            "width": 3,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "material-threshold",
+            "queries": [
+              {
+                "name": "dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f621769900dba6a9ca144b1_threshold",
+                "query": {
+                  "datasetName": "material_threshold_options",
+                  "fields": [
+                    {
+                      "name": "threshold",
+                      "expression": "`threshold`"
+                    },
+                    {
+                      "name": "threshold_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f621783808e4ea020d0b418_min_plastic_percentage",
+                "query": {
+                  "datasetName": "daily_production_trend",
+                  "parameters": [
+                    {
+                      "name": "min_plastic_percentage",
+                      "keyword": "min_plastic_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f62178da76927c93ee4899f_min_plastic_percentage",
+                "query": {
+                  "datasetName": "quality_distribution",
+                  "parameters": [
+                    {
+                      "name": "min_plastic_percentage",
+                      "keyword": "min_plastic_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217998814d295dbeb7da5_min_plastic_percentage",
+                "query": {
+                  "datasetName": "material_usage_by_team",
+                  "parameters": [
+                    {
+                      "name": "min_plastic_percentage",
+                      "keyword": "min_plastic_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217a598642cf0a1ae9dd2_min_plastic_percentage",
+                "query": {
+                  "datasetName": "efficiency_metrics",
+                  "parameters": [
+                    {
+                      "name": "min_plastic_percentage",
+                      "keyword": "min_plastic_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217adb77ade7739c615b2_min_plastic_percentage",
+                "query": {
+                  "datasetName": "top_toys_by_team",
+                  "parameters": [
+                    {
+                      "name": "min_plastic_percentage",
+                      "keyword": "min_plastic_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217b5b53179ccbc90f302_min_plastic_percentage",
+                "query": {
+                  "datasetName": "hourly_production_heatmap",
+                  "parameters": [
+                    {
+                      "name": "min_plastic_percentage",
+                      "keyword": "min_plastic_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217beba3db286f9dfcf6a_min_plastic_percentage",
+                "query": {
+                  "datasetName": "defect_analysis",
+                  "parameters": [
+                    {
+                      "name": "min_plastic_percentage",
+                      "keyword": "min_plastic_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217c7817b3da0af8c9407_min_plastic_percentage",
+                "query": {
+                  "datasetName": "workshop_location_performance",
+                  "parameters": [
+                    {
+                      "name": "min_plastic_percentage",
+                      "keyword": "min_plastic_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f62176f9415a0691628a50a_min_plastic_percentage",
+                "query": {
+                  "datasetName": "elf_team_performance_summary",
+                  "parameters": [
+                    {
+                      "name": "min_plastic_percentage",
+                      "keyword": "min_plastic_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "threshold",
+                    "queryName": "dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f621769900dba6a9ca144b1_threshold"
+                  },
+                  {
+                    "parameterName": "min_plastic_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f621783808e4ea020d0b418_min_plastic_percentage"
+                  },
+                  {
+                    "parameterName": "min_plastic_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f62178da76927c93ee4899f_min_plastic_percentage"
+                  },
+                  {
+                    "parameterName": "min_plastic_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217998814d295dbeb7da5_min_plastic_percentage"
+                  },
+                  {
+                    "parameterName": "min_plastic_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217a598642cf0a1ae9dd2_min_plastic_percentage"
+                  },
+                  {
+                    "parameterName": "min_plastic_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217adb77ade7739c615b2_min_plastic_percentage"
+                  },
+                  {
+                    "parameterName": "min_plastic_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217b5b53179ccbc90f302_min_plastic_percentage"
+                  },
+                  {
+                    "parameterName": "min_plastic_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217beba3db286f9dfcf6a_min_plastic_percentage"
+                  },
+                  {
+                    "parameterName": "min_plastic_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217c7817b3da0af8c9407_min_plastic_percentage"
+                  },
+                  {
+                    "parameterName": "min_plastic_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f62176f9415a0691628a50a_min_plastic_percentage"
+                  }
+                ]
+              },
+              "disallowAll": true,
+              "selection": {
+                "defaultSelection": {
+                  "values": {
+                    "dataType": "INTEGER",
+                    "values": [
+                      {
+                        "value": "0"
+                      }
+                    ]
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Min Plastic %"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 3,
+            "width": 2,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "total-batches",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "elf_team_performance_summary",
+                  "fields": [
+                    {
+                      "name": "elf_team_id",
+                      "expression": "`elf_team_id`"
+                    },
+                    {
+                      "name": "sum(total_batches)",
+                      "expression": "SUM(`total_batches`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "elf_team_id",
+                  "axis": {
+                    "hideTitle": true
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "natural-order"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(total_batches)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  },
+                  "axis": {
+                    "hideTitle": true
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Total Batches by Elf Team"
+              },
+              "mark": {
+                "colors": [
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 4
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 2
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 3
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 4
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 5
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 6
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 7
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 8
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 9
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 10
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 11,
+            "width": 2,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "qa-metrics",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "elf_team_performance_summary",
+                  "fields": [
+                    {
+                      "name": "elf_team_id",
+                      "expression": "`elf_team_id`"
+                    },
+                    {
+                      "name": "avg_paint_quality",
+                      "expression": "`avg_paint_quality`"
+                    },
+                    {
+                      "name": "avg_assembly_score",
+                      "expression": "`avg_assembly_score`"
+                    },
+                    {
+                      "name": "avg_defects",
+                      "expression": "`avg_defects`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "elf_team_id",
+                  "axis": {
+                    "hideLabels": false,
+                    "hideTitle": true
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "axis": {
+                    "hideTitle": false,
+                    "title": "Total Batches"
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "fields": [
+                    {
+                      "fieldName": "avg_paint_quality",
+                      "displayName": "Average Paint Quality"
+                    },
+                    {
+                      "fieldName": "avg_assembly_score",
+                      "displayName": "Average Assembly Score"
+                    },
+                    {
+                      "fieldName": "avg_defects",
+                      "displayName": "Average Defects"
+                    }
+                  ]
+                },
+                "color": {
+                  "legend": {
+                    "position": "top"
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "QA Metrics"
+              },
+              "annotations": [
+                {
+                  "type": "horizontal-line",
+                  "encodings": {
+                    "y": {
+                      "dataValue": "1",
+                      "dataType": "DOUBLE"
+                    },
+                    "label": {
+                      "value": "Expected Tolerance"
+                    },
+                    "color": {
+                      "value": {
+                        "themeColorType": "fontColor"
+                      }
+                    }
+                  }
+                }
+              ],
+              "mark": {
+                "colors": [
+                  {
+                    "themeColorType": "fontColor"
+                  },
+                  {
+                    "themeColorType": "selectionColor"
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 1
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 4
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 5
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 6
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 7
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 8
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 9
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 10
+                  }
+                ],
+                "layout": "group"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 17,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "material-usage-breakdown-elf-team",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "material_usage_by_team",
+                  "fields": [
+                    {
+                      "name": "sum(amount)",
+                      "expression": "SUM(`amount`)"
+                    },
+                    {
+                      "name": "material_type",
+                      "expression": "`material_type`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pie",
+              "encodings": {
+                "angle": {
+                  "fieldName": "sum(amount)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "axis": {
+                    "hideTitle": true
+                  }
+                },
+                "color": {
+                  "fieldName": "material_type",
+                  "legend": {
+                    "hideTitle": true,
+                    "position": "top"
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "angle-reversed"
+                    },
+                    "mappings": [
+                      {
+                        "value": "Plastic",
+                        "color": {
+                          "themeColorType": "visualizationColors",
+                          "position": 3
+                        }
+                      },
+                      {
+                        "value": "Fabric",
+                        "color": {
+                          "themeColorType": "fontColor"
+                        }
+                      },
+                      {
+                        "value": "Metal",
+                        "color": {
+                          "themeColorType": "visualizationColors",
+                          "position": 5
+                        }
+                      },
+                      {
+                        "value": "Wood",
+                        "color": {
+                          "themeColorType": "visualizationColors",
+                          "position": 4
+                        }
+                      }
+                    ]
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "frame": {
+                "title": "Material Usage Breakdown",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 23,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "c1b90f6d",
+            "queries": [
+              {
+                "name": "dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f621769900dba6a9ca144b1_threshold",
+                "query": {
+                  "datasetName": "material_threshold_options",
+                  "fields": [
+                    {
+                      "name": "threshold",
+                      "expression": "`threshold`"
+                    },
+                    {
+                      "name": "threshold_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f621783808e4ea020d0b418_min_wood_percentage",
+                "query": {
+                  "datasetName": "daily_production_trend",
+                  "parameters": [
+                    {
+                      "name": "min_wood_percentage",
+                      "keyword": "min_wood_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f62178da76927c93ee4899f_min_wood_percentage",
+                "query": {
+                  "datasetName": "quality_distribution",
+                  "parameters": [
+                    {
+                      "name": "min_wood_percentage",
+                      "keyword": "min_wood_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217998814d295dbeb7da5_min_wood_percentage",
+                "query": {
+                  "datasetName": "material_usage_by_team",
+                  "parameters": [
+                    {
+                      "name": "min_wood_percentage",
+                      "keyword": "min_wood_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217a598642cf0a1ae9dd2_min_wood_percentage",
+                "query": {
+                  "datasetName": "efficiency_metrics",
+                  "parameters": [
+                    {
+                      "name": "min_wood_percentage",
+                      "keyword": "min_wood_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217adb77ade7739c615b2_min_wood_percentage",
+                "query": {
+                  "datasetName": "top_toys_by_team",
+                  "parameters": [
+                    {
+                      "name": "min_wood_percentage",
+                      "keyword": "min_wood_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217b5b53179ccbc90f302_min_wood_percentage",
+                "query": {
+                  "datasetName": "hourly_production_heatmap",
+                  "parameters": [
+                    {
+                      "name": "min_wood_percentage",
+                      "keyword": "min_wood_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217beba3db286f9dfcf6a_min_wood_percentage",
+                "query": {
+                  "datasetName": "defect_analysis",
+                  "parameters": [
+                    {
+                      "name": "min_wood_percentage",
+                      "keyword": "min_wood_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217c7817b3da0af8c9407_min_wood_percentage",
+                "query": {
+                  "datasetName": "workshop_location_performance",
+                  "parameters": [
+                    {
+                      "name": "min_wood_percentage",
+                      "keyword": "min_wood_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f62176f9415a0691628a50a_min_wood_percentage",
+                "query": {
+                  "datasetName": "elf_team_performance_summary",
+                  "parameters": [
+                    {
+                      "name": "min_wood_percentage",
+                      "keyword": "min_wood_percentage"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "threshold",
+                    "queryName": "dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f621769900dba6a9ca144b1_threshold"
+                  },
+                  {
+                    "parameterName": "min_wood_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f621783808e4ea020d0b418_min_wood_percentage"
+                  },
+                  {
+                    "parameterName": "min_wood_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f62178da76927c93ee4899f_min_wood_percentage"
+                  },
+                  {
+                    "parameterName": "min_wood_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217998814d295dbeb7da5_min_wood_percentage"
+                  },
+                  {
+                    "parameterName": "min_wood_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217a598642cf0a1ae9dd2_min_wood_percentage"
+                  },
+                  {
+                    "parameterName": "min_wood_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217adb77ade7739c615b2_min_wood_percentage"
+                  },
+                  {
+                    "parameterName": "min_wood_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217b5b53179ccbc90f302_min_wood_percentage"
+                  },
+                  {
+                    "parameterName": "min_wood_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217beba3db286f9dfcf6a_min_wood_percentage"
+                  },
+                  {
+                    "parameterName": "min_wood_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f6217c7817b3da0af8c9407_min_wood_percentage"
+                  },
+                  {
+                    "parameterName": "min_wood_percentage",
+                    "queryName": "parameter_dashboards/01f0d26e9f6211db95120412c63bb85b/datasets/01f0d26e9f62176f9415a0691628a50a_min_wood_percentage"
+                  }
+                ]
+              },
+              "disallowAll": true,
+              "selection": {
+                "defaultSelection": {
+                  "values": {
+                    "dataType": "INTEGER",
+                    "values": [
+                      {
+                        "value": "0"
+                      }
+                    ]
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Min Wood %"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 4,
+            "width": 2,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "491258fa",
+            "multilineTextboxSpec": {
+              "lines": [
+                "### **Toy & Material Composition**"
+              ]
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 10,
+            "width": 3,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "944ee497",
+            "multilineTextboxSpec": {
+              "lines": [
+                "### **Team Drilldown**"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 10,
+            "width": 3,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "2490ea1f",
+            "multilineTextboxSpec": {
+              "lines": [
+                "---"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 6,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "total-batch-count-1",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "elf_team_performance_summary",
+                  "fields": [
+                    {
+                      "name": "sum(total_batches)",
+                      "expression": "SUM(`total_batches`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_batches)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Total Batch Count"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 11,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "2cebdd18",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "elf_team_performance_summary",
+                  "fields": [
+                    {
+                      "name": "sum(total_production_hours)",
+                      "expression": "SUM(`total_production_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_production_hours)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Total Production Hours"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 13,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "8dee6722",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "elf_team_performance_summary",
+                  "fields": [
+                    {
+                      "name": "countdistinct(elf_team_id)",
+                      "expression": "COUNT(DISTINCT `elf_team_id`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "countdistinct(elf_team_id)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Number of Elf Teams"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 15,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "material-usage-by-team-1",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "material_usage_by_team",
+                  "fields": [
+                    {
+                      "name": "material_type",
+                      "expression": "`material_type`"
+                    },
+                    {
+                      "name": "sum(amount)",
+                      "expression": "SUM(`amount`)"
+                    },
+                    {
+                      "name": "elf_team_id",
+                      "expression": "`elf_team_id`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "sum(amount)",
+                  "axis": {
+                    "hideTitle": true,
+                    "hideGrid": true
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "elf_team_id",
+                  "axis": {
+                    "hideTitle": true,
+                    "hideLabels": false
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "color": {
+                  "fieldName": "material_type",
+                  "legend": {
+                    "hideTitle": true,
+                    "hide": false,
+                    "position": "top"
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "Fabric",
+                        "color": {
+                          "themeColorType": "fontColor"
+                        }
+                      },
+                      {
+                        "value": "Metal",
+                        "color": {
+                          "themeColorType": "visualizationColors",
+                          "position": 5
+                        }
+                      },
+                      {
+                        "value": "Wood",
+                        "color": {
+                          "themeColorType": "visualizationColors",
+                          "position": 4
+                        }
+                      },
+                      {
+                        "value": "Plastic",
+                        "color": {
+                          "themeColorType": "visualizationColors",
+                          "position": 3
+                        }
+                      }
+                    ]
+                  }
+                },
+                "label": {
+                  "show": false
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Material Usage by Team"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 29,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "production-count-quality-by-hour-of-day",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "hourly_production_heatmap",
+                  "fields": [
+                    {
+                      "name": "hour_of_day",
+                      "expression": "`hour_of_day`"
+                    },
+                    {
+                      "name": "sum(production_count)",
+                      "expression": "SUM(`production_count`)"
+                    },
+                    {
+                      "name": "avg(avg_quality)",
+                      "expression": "AVG(`avg_quality`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "combo",
+              "encodings": {
+                "x": {
+                  "fieldName": "hour_of_day",
+                  "displayName": "Hour of Day",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "color": {
+                  "legend": {
+                    "position": "top"
+                  }
+                },
+                "y": {
+                  "primary": {
+                    "fields": [
+                      {
+                        "fieldName": "sum(production_count)",
+                        "displayName": "Production Count"
+                      }
+                    ],
+                    "scale": {
+                      "type": "quantitative"
+                    }
+                  },
+                  "secondary": {
+                    "fields": [
+                      {
+                        "fieldName": "avg(avg_quality)",
+                        "displayName": "Average Quality"
+                      }
+                    ],
+                    "scale": {
+                      "type": "quantitative"
+                    },
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 2
+                      }
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Production Count and Quality by Hour of Day"
+              },
+              "mark": {
+                "colors": [
+                  {
+                    "themeColorType": "fontColor"
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 3
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 3
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 4
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 5
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 6
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 7
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 8
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 9
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 10
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 23,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "safety-pass-fail-count",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "daily_production_trend",
+                  "fields": [
+                    {
+                      "name": "daily(production_date)",
+                      "expression": "DATE_TRUNC(\"DAY\", `production_date`)"
+                    },
+                    {
+                      "name": "sum(safety_failed)",
+                      "expression": "SUM(`safety_failed`)"
+                    },
+                    {
+                      "name": "sum(safety_passed)",
+                      "expression": "SUM(`safety_passed`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "daily(production_date)",
+                  "axis": {
+                    "hideTitle": true
+                  },
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fields": [
+                    {
+                      "fieldName": "sum(safety_failed)",
+                      "displayName": "Fail"
+                    },
+                    {
+                      "fieldName": "sum(safety_passed)",
+                      "displayName": "Pass"
+                    }
+                  ],
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "axis": {
+                    "hideTitle": false,
+                    "title": "Count"
+                  }
+                },
+                "color": {
+                  "legend": {
+                    "hideTitle": true,
+                    "position": "top"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Daily Safety Pass/Fail Count"
+              },
+              "mark": {
+                "colors": [
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 4
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 3
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 3
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 4
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 5
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 6
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 7
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 8
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 9
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 10
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 29,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "production-trend-forecast",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "10919f22",
+                  "fields": [
+                    {
+                      "name": "production_date",
+                      "expression": "`production_date`"
+                    },
+                    {
+                      "name": "daily_production",
+                      "expression": "`daily_production`"
+                    },
+                    {
+                      "name": "daily_production_forecast",
+                      "expression": "`daily_production_forecast`"
+                    },
+                    {
+                      "name": "daily_production_upper",
+                      "expression": "`daily_production_upper`"
+                    },
+                    {
+                      "name": "daily_production_lower",
+                      "expression": "`daily_production_lower`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "forecast-line",
+              "encodings": {
+                "x": {
+                  "fieldName": "production_date",
+                  "axis": {
+                    "hideTitle": true,
+                    "hideLabels": false,
+                    "hideGrid": false
+                  },
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "original": {
+                    "fieldName": "daily_production",
+                    "displayName": "Sum of daily_production"
+                  },
+                  "prediction": {
+                    "fieldName": "daily_production_forecast",
+                    "displayName": "Sum of daily_production_forecast"
+                  },
+                  "predictionUpper": {
+                    "fieldName": "daily_production_upper",
+                    "displayName": "Sum of daily_production_upper"
+                  },
+                  "predictionLower": {
+                    "fieldName": "daily_production_lower",
+                    "displayName": "Sum of daily_production_lower"
+                  },
+                  "axis": {
+                    "title": "Count"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Production Trend & Forecast"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 6,
+            "width": 6,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "average-popularity-toys",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "top_toys_by_team",
+                  "fields": [
+                    {
+                      "name": "sum(production_count)",
+                      "expression": "SUM(`production_count`)"
+                    },
+                    {
+                      "name": "avg(avg_popularity)",
+                      "expression": "AVG(`avg_popularity`)"
+                    },
+                    {
+                      "name": "toy_name",
+                      "expression": "`toy_name`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "fields": [
+                    {
+                      "fieldName": "sum(production_count)",
+                      "displayName": "Production Total"
+                    },
+                    {
+                      "fieldName": "avg(avg_popularity)",
+                      "displayName": "Average Popularity"
+                    }
+                  ]
+                },
+                "y": {
+                  "fieldName": "toy_name",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  }
+                },
+                "color": {
+                  "legend": {
+                    "position": "top"
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "frame": {
+                "title": "Average Popularity of Toys",
+                "showTitle": true
+              },
+              "mark": {
+                "colors": [
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 3
+                  },
+                  {
+                    "themeColorType": "fontColor"
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 4
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 5
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 6
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 7
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 8
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 9
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 10
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 10
+                  }
+                ],
+                "layout": "group"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 11,
+            "width": 3,
+            "height": 12
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    },
+    "applyModeEnabled": false
+  }
+}
